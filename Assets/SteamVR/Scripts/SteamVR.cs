@@ -24,15 +24,42 @@ namespace Valve.VR
         // to activate it in the process.
         public static bool active { get { return _instance != null; } }
 
+        private static bool? isSupported = null;
+
         // Set this to false to keep from auto-initializing when calling SteamVR.instance.
         private static bool _enabled = true;
         public static bool enabled
         {
             get
             {
-                if (!XRSettings.enabled && !isStandalone)
-                    enabled = false;
-                return _enabled;
+                if (_enabled)
+                {
+                    // EVRC patch: standalone overlays do not use Unity XR, so XRSettings says nothing about OpenVR.
+                    if (isStandalone)
+                        return true;
+#if UNITY_2020_1_OR_NEWER || OPENVR_XR_API
+                    if (isSupported == null)
+                    {
+                        string[] supportedDevices = XRSettings.supportedDevices;
+                        for (int index = 0; index < supportedDevices.Length; index++)
+                        {
+                            if (supportedDevices[index].Contains("OpenVR"))
+                            {
+                                isSupported = true;
+                            }
+                        }
+                        if (isSupported == null)
+                        {
+                            isSupported = false;
+                        }
+                    }
+                    return isSupported.Value;
+#else
+                    return XRSettings.enabled;
+#endif
+                }
+
+                return false;
             }
             set
             {
@@ -84,8 +111,6 @@ namespace Valve.VR
 
         public static InitializedStates initializedState = InitializedStates.None;
 
-        public static bool isStandalone { get; private set; } = false;
-
         public static void Initialize(bool forceUnityVRMode = false)
         {
             if (forceUnityVRMode)
@@ -107,9 +132,11 @@ namespace Valve.VR
                 SteamVR_Behaviour.Initialize(forceUnityVRMode);
         }
 
+        public static bool isStandalone { get; private set; } = false;
+
         /**
-         * Initializes SteamVR in standalone mode without 
-         * This mode is intended for overlays that do not use Unity's XR rendering.
+         * EVRC patch: initializes SteamVR without Unity's XR rendering.
+         * This mode is intended for overlays.
          */
         public static void InitializeStandalone(EVRApplicationType applicationType, string pchStartupInfo = "")
         {
@@ -136,24 +163,33 @@ namespace Valve.VR
         {
             string errorLog = "<b>[SteamVR]</b> Initialization failed. ";
 
-            if (!isStandalone)
+            // EVRC patch: player XR settings are irrelevant to a standalone overlay.
+            if (isStandalone)
             {
-                if (XRSettings.enabled == false)
-                    errorLog += "VR may be disabled in player settings. Go to player settings in the editor and check the 'Virtual Reality Supported' checkbox'. ";
-                if (XRSettings.supportedDevices != null && XRSettings.supportedDevices.Length > 0)
-                {
-                    if (XRSettings.supportedDevices.Contains("OpenVR") == false)
-                        errorLog += "OpenVR is not in your list of supported virtual reality SDKs. Add it to the list in player settings. ";
-                    else if (XRSettings.supportedDevices.First().Contains("OpenVR") == false)
-                        errorLog += "OpenVR is not first in your list of supported virtual reality SDKs. <b>This is okay, but if you have an Oculus device plugged in, and Oculus above OpenVR in this list, it will try and use the Oculus SDK instead of OpenVR.</b> ";
-                }
-                else
-                {
-                    errorLog += "You have no SDKs in your Player Settings list of supported virtual reality SDKs. Add OpenVR to it. ";
-                }
-
-                errorLog += "To force OpenVR initialization call SteamVR.Initialize(true). ";
+                Debug.LogWarning(errorLog);
+                return;
             }
+
+#if OPENVR_XR_API
+            errorLog += "Please verify that you have SteamVR installed, your hmd is functioning, and OpenVR Loader is checked in the XR Plugin Management section of Project Settings.";
+#else
+
+            if (XRSettings.enabled == false)
+                errorLog += "VR may be disabled in player settings. Go to player settings in the editor and check the 'Virtual Reality Supported' checkbox'. ";
+            if (XRSettings.supportedDevices != null && XRSettings.supportedDevices.Length > 0)
+            {
+                if (XRSettings.supportedDevices.Contains("OpenVR") == false)
+                    errorLog += "OpenVR is not in your list of supported virtual reality SDKs. Add it to the list in player settings. ";
+                else if (XRSettings.supportedDevices.First().Contains("OpenVR") == false)
+                    errorLog += "OpenVR is not first in your list of supported virtual reality SDKs. <b>This is okay, but if you have an Oculus device plugged in, and Oculus above OpenVR in this list, it will try and use the Oculus SDK instead of OpenVR.</b> ";
+            }
+            else
+            {
+                errorLog += "You have no SDKs in your Player Settings list of supported virtual reality SDKs. Add OpenVR to it. ";
+            }
+
+            errorLog += "To attempt to force OpenVR initialization call SteamVR.Initialize(true). ";
+#endif
 
             Debug.LogWarning(errorLog);
         }
@@ -165,6 +201,8 @@ namespace Valve.VR
             try
             {
                 var error = EVRInitError.None;
+
+#if !OPENVR_XR_API
                 if (!SteamVR.usingNativeSupport && !isStandalone)
                 {
                     ReportGeneralErrors();
@@ -172,6 +210,7 @@ namespace Valve.VR
                     SteamVR_Events.Initialized.Send(false);
                     return null;
                 }
+#endif
 
                 // Verify common interfaces are valid.
 
@@ -205,10 +244,12 @@ namespace Valve.VR
 
                 settings = SteamVR_Settings.instance;
 
+#if !OPENVR_XR_API
                 if (Application.isEditor)
                     IdentifyEditorApplication();
 
                 SteamVR_Input.IdentifyActionsFile();
+#endif
 
                 if (SteamVR_Settings.instance.inputUpdateMode != SteamVR_UpdateModes.Nothing || SteamVR_Settings.instance.poseUpdateMode != SteamVR_UpdateModes.Nothing)
                 {
@@ -280,6 +321,7 @@ namespace Valve.VR
         public string hmd_TrackingSystemName { get { return GetStringProperty(ETrackedDeviceProperty.Prop_TrackingSystemName_String); } }
         public string hmd_ModelNumber { get { return GetStringProperty(ETrackedDeviceProperty.Prop_ModelNumber_String); } }
         public string hmd_SerialNumber { get { return GetStringProperty(ETrackedDeviceProperty.Prop_SerialNumber_String); } }
+        public string hmd_Type { get { return GetStringProperty(ETrackedDeviceProperty.Prop_ControllerType_String); } }
 
         public float hmd_SecondsFromVsyncToPhotons { get { return GetFloatProperty(ETrackedDeviceProperty.Prop_SecondsFromVsyncToPhotons_Float); } }
         public float hmd_DisplayFrequency { get { return GetFloatProperty(ETrackedDeviceProperty.Prop_DisplayFrequency_Float); } }
@@ -607,7 +649,7 @@ namespace Valve.VR
             }
         }
 
-        #region Event callbacks
+#region Event callbacks
 
         private void OnInitializing(bool initializing)
         {
@@ -672,12 +714,12 @@ namespace Valve.VR
             }
         }
 
-        #endregion
+#endregion
 
         private SteamVR()
         {
             hmd = OpenVR.System;
-            Debug.Log("<b>[SteamVR]</b> Initialized. Connected to " + hmd_TrackingSystemName + ":" + hmd_SerialNumber);
+            Debug.LogFormat("<b>[SteamVR]</b> Initialized. Connected to {0} : {1} : {2} :: {3}", hmd_TrackingSystemName, hmd_ModelNumber, hmd_SerialNumber, hmd_Type);
 
             compositor = OpenVR.Compositor;
             overlay = OpenVR.Overlay;
