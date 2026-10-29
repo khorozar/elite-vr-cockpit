@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 using Valve.VR;
 
@@ -33,7 +33,7 @@ namespace EVRC
         {
             yield return new WaitForSeconds(holdForSeconds);
             Debug.Log("Resetting seated position");
-            OpenVR.System.ResetSeatedZeroPose();
+            OpenVR.Chaperone.ResetZeroPose(ETrackingUniverseOrigin.TrackingUniverseSeated);
         }
     }
 }

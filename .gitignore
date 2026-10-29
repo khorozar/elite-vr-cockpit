@@ -34,7 +34,6 @@ ExportedObj/
 sysinfo.txt
 
 # TextMesh Pro assets which are auto-imported by the package
-/Assets/TextMesh Pro
 /Assets/TextMesh Pro.meta
 
 # Builds
@@ -53,3 +52,8 @@ unityProject.vrmanifest
 !Assets/Plugins/Markdig.dll
 !Assets/Plugins/Markdig.pdb
 !Assets/Plugins/Markdig.pdb.meta
+
+# Unity 6 per-user and generated files
+/[Uu]ser[Ss]ettings/
+/Assets/Scenes/EVRC/
+/Assets/Scenes/EVRC.meta
